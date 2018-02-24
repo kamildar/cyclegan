@@ -4,38 +4,52 @@ import numpy as np
 from torch.autograd import Variable
 
 
-dim = None
-dropout = None
-norm_lay = None
+#dim = None
+#dropout = None
+#norm_lay = None
 activation = nn.LeakyReLU(0.1)
 
 
+# base resnet block
+# conv > ?dropout > conv
+# possible params
+# kernel_size, padding, bias, reflection type
 class ResnetBlock(nn.Module):
     def __init__(self, dim, norm_lay, dropout):
         super().__init__()
         self.conv_seq = self.conv_block(dim, norm_lay, dropout)
 
-    def conv_block(dim, norm_lay, lkyrelu, dropout):
-        conv_seq = []
-        conv_block = [
+    def conv_block(self, dim, norm_lay, dropout):
+        conv_block = []
+
+        conv_block += [
             nn.ReflectionPad2d(1),
             nn.Conv2d(dim, dim, kernel_size=3, padding=0, bias=True),
             norm_lay(dim),
             activation
         ]
-
-        conv_seq += conv_block
+        
+        
         if dropout is not None:
-            conv_seq += nn.Dropout(dropout)
-        conv_seq += conv_block
+            conv_block += [nn.Dropout(dropout)]
 
-    return nn.Sequantial(*conv_seq)
+        conv_block += [
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(dim, dim, kernel_size=3, padding=0, bias=True),
+            norm_lay(dim)
+        ]
+
+        return nn.Sequential(*conv_block)
 
     def forward(self, input):
-        output = input + self.conv_block(input)
+        output = input + self.conv_seq(input)
         return output
 
-
+# generative block via resnet
+# conv > downconv* > resnet block* > transp conv* > conv
+# possible params
+# first/last conv: ksize, pad, stride
+# down/trans conv: number, conv params
 class ResnetGenerator(nn.Module):
     def __init__(self,
                  input_nc,
@@ -43,8 +57,7 @@ class ResnetGenerator(nn.Module):
                  gen_filters,
                  norm_lay,
                  dropout,
-                 n_blocks,
-                 padding):
+                 n_blocks):
         super().__init__()
         self._input_nc = input_nc
         self._output_nc = output_nc
@@ -54,7 +67,7 @@ class ResnetGenerator(nn.Module):
             nn.ReflectionPad2d(3),
             nn.Conv2d(input_nc, gen_filters, kernel_size=7, padding=0),
             norm_lay(gen_filters),
-            nn.ReLU(True)
+            activation
         ]
 
         n_downsampling = 2
@@ -68,7 +81,7 @@ class ResnetGenerator(nn.Module):
                     stride=2,
                     padding=1
                     ),
-                norm_lay,
+                norm_lay(gen_filters * power * 2),
                 activation
             ]
 
@@ -92,7 +105,7 @@ class ResnetGenerator(nn.Module):
                     padding=1,
                     output_padding=1
                     ),
-                norm_lay,
+                norm_lay(int(gen_filters * power / 2)),
                 activation
                 ]
 
@@ -102,16 +115,16 @@ class ResnetGenerator(nn.Module):
                                  padding=0)]
         resnet_seq += [nn.Tanh()]
 
-        self._resnet_seq = nn.Sequantial(resnet_seq)
+        self._resnet_seq = nn.Sequential(*resnet_seq)
 
     def forward(self, input):
         output = self._resnet_seq(input)
         return output
 
-
+# almost magic
 class GANLoss(nn.Module):
     def __init__(self,
-                 use_lsgan=True,
+                 MSE=True,
                  target_real_label=1.0,
                  target_fake_label=0.0,
                  tensor=torch.FloatTensor):
@@ -121,7 +134,7 @@ class GANLoss(nn.Module):
         self.real_label_var = None
         self.fake_label_var = None
         self.Tensor = tensor
-        if use_lsgan:
+        if MSE:
             self.loss = nn.MSELoss()
         else:
             self.loss = nn.BCELoss()
@@ -150,6 +163,7 @@ class GANLoss(nn.Module):
         target_tensor = self.get_target_tensor(input, target_is_real)
         return self.loss(input, target_tensor)
 
+# conv > conv* > conv
 # possible params
 # kernel_sizes, paddings, strides, actiavations, norm_lay, min_filt
 # improvements: dropout
@@ -159,8 +173,7 @@ class Discrimanator(nn.Module):
                  discr_filters,
                  max_power,
                  n_layers,
-                 norm_lay,
-                 use_sigmoid):
+                 norm_lay):
         super().__init__()
 
         ksize = 4
@@ -171,14 +184,14 @@ class Discrimanator(nn.Module):
                       kernel_size=ksize,
                       stride=strd,
                       padding=pad),
-            norm_lay,
+            norm_lay(discr_filters),
             activation    
         ]
 
         filters = np.linspace(discr_filters,
                               discr_filters * max_power,
                               num=n_layers,
-                              dtype=int)
+                              dtype=int).tolist()
 
         prev_filter = discr_filters
         for interm_filter in filters[1:]:
@@ -190,7 +203,7 @@ class Discrimanator(nn.Module):
                     stride=strd,
                     padding=pad
                     ),
-                norm_lay,
+                norm_lay(interm_filter),
                 activation
             ]
             prev_filter = interm_filter
