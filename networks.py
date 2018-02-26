@@ -1,7 +1,6 @@
-import torch
 import torch.nn as nn
 import numpy as np
-from torch.autograd import Variable
+import torch.nn.functional as F
 
 
 #dim = None
@@ -9,6 +8,10 @@ from torch.autograd import Variable
 #norm_lay = None
 activation = nn.LeakyReLU(0.1)
 
+# for square images
+def conv_size(input_size, kernel_size, stride, padding):
+    out = int((input_size + 2 * padding - kernel_size) / stride) + 1
+    return out
 
 # base resnet block
 # conv > ?dropout > conv
@@ -122,46 +125,46 @@ class ResnetGenerator(nn.Module):
         return output
 
 # almost magic
-class GANLoss(nn.Module):
-    def __init__(self,
-                 MSE=True,
-                 target_real_label=1.0,
-                 target_fake_label=0.0,
-                 tensor=torch.FloatTensor):
-        super(GANLoss, self).__init__()
-        self.real_label = target_real_label
-        self.fake_label = target_fake_label
-        self.real_label_var = None
-        self.fake_label_var = None
-        self.Tensor = tensor
-        if MSE:
-            self.loss = nn.MSELoss()
-        else:
-            self.loss = nn.BCELoss()
+# class GANLoss(nn.Module):
+#     def __init__(self,
+#                  MSE=True,
+#                  target_real_label=1.0,
+#                  target_fake_label=0.0,
+#                  tensor=torch.FloatTensor):
+#         super(GANLoss, self).__init__()
+#         self.real_label = target_real_label
+#         self.fake_label = target_fake_label
+#         self.real_label_var = None
+#         self.fake_label_var = None
+#         self.Tensor = tensor
+#         if MSE:
+#             self.loss = nn.MSELoss()
+#         else:
+#             self.loss = nn.BCELoss()
 
-    def get_target_tensor(self, input, target_is_real):
-        target_tensor = None
-        if target_is_real:
-            create_label = ((self.real_label_var is None)
-                            or (self.real_label_var.numel() != input.numel()))
-            if create_label:
-                real_tensor = self.Tensor(input.size()).fill_(self.real_label)
-                self.real_label_var = Variable(
-                    real_tensor, requires_grad=False)
-            target_tensor = self.real_label_var
-        else:
-            create_label = ((self.fake_label_var is None)
-                            or (self.fake_label_var.numel() != input.numel()))
-            if create_label:
-                fake_tensor = self.Tensor(input.size()).fill_(self.fake_label)
-                self.fake_label_var = Variable(
-                    fake_tensor, requires_grad=False)
-            target_tensor = self.fake_label_var
-        return target_tensor
+#     def get_target_tensor(self, input, target_is_real):
+#         target_tensor = None
+#         if target_is_real:
+#             create_label = ((self.real_label_var is None)
+#                             or (self.real_label_var.numel() != input.numel()))
+#             if create_label:
+#                 real_tensor = self.Tensor(input.size()).fill_(self.real_label)
+#                 self.real_label_var = Variable(
+#                     real_tensor, requires_grad=False)
+#             target_tensor = self.real_label_var
+#         else:
+#             create_label = ((self.fake_label_var is None)
+#                             or (self.fake_label_var.numel() != input.numel()))
+#             if create_label:
+#                 fake_tensor = self.Tensor(input.size()).fill_(self.fake_label)
+#                 self.fake_label_var = Variable(
+#                     fake_tensor, requires_grad=False)
+#             target_tensor = self.fake_label_var
+#         return target_tensor
 
-    def __call__(self, input, target_is_real):
-        target_tensor = self.get_target_tensor(input, target_is_real)
-        return self.loss(input, target_tensor)
+#     def __call__(self, input, target_is_real):
+#         target_tensor = self.get_target_tensor(input, target_is_real)
+#         return self.loss(input, target_tensor)
 
 # conv > conv* > conv
 # possible params
@@ -173,29 +176,33 @@ class Discrimanator(nn.Module):
                  discr_filters,
                  max_power,
                  n_layers,
-                 norm_lay):
+                 norm_lay,
+                 start_size,
+                 out_linear=10):
         super().__init__()
+        self._input_nc = input_nc
 
+        size = start_size
         ksize = 4
         strd = 1
         pad = 1
-        discr_seq = [
+        discr_body = [
             nn.Conv2d(input_nc, discr_filters,
                       kernel_size=ksize,
                       stride=strd,
                       padding=pad),
             norm_lay(discr_filters),
-            activation    
+            activation
         ]
 
         filters = np.linspace(discr_filters,
                               discr_filters * max_power,
-                              num=n_layers,
+                              num=n_layers+1,
                               dtype=int).tolist()
 
         prev_filter = discr_filters
         for interm_filter in filters[1:]:
-            discr_seq += [
+            discr_body += [
                 nn.Conv2d(
                     prev_filter,
                     interm_filter,
@@ -208,7 +215,7 @@ class Discrimanator(nn.Module):
             ]
             prev_filter = interm_filter
 
-        discr_seq += [
+        discr_body += [
             nn.Conv2d(
                 prev_filter,
                 1,
@@ -218,8 +225,18 @@ class Discrimanator(nn.Module):
                 )
             ]
 
-        self.model = nn.Sequential(*discr_seq)
+        for i in range(n_layers + 2):
+            size = conv_size(size, ksize, strd, pad)
+        self._linear_size = size * size
+
+        discr_head = [nn.Linear(size * size, out_linear)]
+        if out_linear != 1:
+            discr_head += [nn.Linear(out_linear, 1)]
+
+        self.body = nn.Sequential(*discr_body)
+        self.head = nn.Sequential(*discr_head)
 
     def forward(self, input):
-        output = self.model(input)
-        return output
+        body_out = self.body(input)
+        output = self.head(body_out.view(-1, self._linear_size))
+        return F.sigmoid(output)
