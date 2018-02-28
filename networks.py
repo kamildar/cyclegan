@@ -3,10 +3,12 @@ import numpy as np
 import torch.nn.functional as F
 
 
+
 #dim = None
 #dropout = None
 #norm_lay = None
 activation = nn.LeakyReLU(0.1)
+bias = True
 
 # for square images
 def conv_size(input_size, kernel_size, stride, padding):
@@ -27,7 +29,7 @@ class ResnetBlock(nn.Module):
 
         conv_block += [
             nn.ReflectionPad2d(1),
-            nn.Conv2d(dim, dim, kernel_size=3, padding=0, bias=True),
+            nn.Conv2d(dim, dim, kernel_size=3, padding=0, bias=bias),
             norm_lay(dim),
             activation
         ]
@@ -38,7 +40,7 @@ class ResnetBlock(nn.Module):
 
         conv_block += [
             nn.ReflectionPad2d(1),
-            nn.Conv2d(dim, dim, kernel_size=3, padding=0, bias=True),
+            nn.Conv2d(dim, dim, kernel_size=3, padding=0, bias=bias),
             norm_lay(dim)
         ]
 
@@ -68,7 +70,7 @@ class ResnetGenerator(nn.Module):
 
         resnet_seq = [
             nn.ReflectionPad2d(3),
-            nn.Conv2d(input_nc, gen_filters, kernel_size=7, padding=0),
+            nn.Conv2d(input_nc, gen_filters, kernel_size=7, padding=0, bias=bias),
             norm_lay(gen_filters),
             activation
         ]
@@ -82,7 +84,8 @@ class ResnetGenerator(nn.Module):
                     gen_filters * power * 2,
                     kernel_size=3,
                     stride=2,
-                    padding=1
+                    padding=1,
+                    bias=bias
                     ),
                 norm_lay(gen_filters * power * 2),
                 activation
@@ -115,7 +118,8 @@ class ResnetGenerator(nn.Module):
         resnet_seq += [nn.ReflectionPad2d(3)]
         resnet_seq += [nn.Conv2d(gen_filters, output_nc,
                                  kernel_size=7,
-                                 padding=0)]
+                                 padding=0,
+                                 bias=bias)]
         resnet_seq += [nn.Tanh()]
 
         self._resnet_seq = nn.Sequential(*resnet_seq)
@@ -170,7 +174,7 @@ class ResnetGenerator(nn.Module):
 # possible params
 # kernel_sizes, paddings, strides, actiavations, norm_lay, min_filt
 # improvements: dropout
-class Discrimanator(nn.Module):
+class Discriminator(nn.Module):
     def __init__(self,
                  input_nc,
                  discr_filters,
