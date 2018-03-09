@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import matplotlib.pyplot as plt
 from collections import OrderedDict
 
 def linear_size(output):
@@ -49,9 +50,120 @@ def set_names(discr_a, discr_b,
     opt_discr_b.__doc__ = 'opt_discr_b'
     pass
 
+def train_stage(*args):
+    for arg in args:
+        arg.train()
+
 def create_checkpoint(*args):
     checkpoint = OrderedDict()
     for net in args:
         name = net.__doc__
         checkpoint[name] = net.state_dict()
     return checkpoint
+
+def exp_moving_mean(data, window=250):
+    if not isinstance(data, np.ndarray):
+        data = np.array(data)
+
+    alpha = 2 /(window + 1.0)
+    alpha_rev = 1-alpha
+    n = data.shape[0]
+
+    pows = alpha_rev**(np.arange(n+1))
+
+    scale_arr = 1/pows[:-1]
+    offset = data[0]*pows[1:]
+    pw0 = alpha*alpha_rev**(n-1)
+
+    mult = data*pw0*scale_arr
+    cumsums = mult.cumsum()
+    out = offset + cumsums*scale_arr[::-1]
+    return out
+
+def visualize_loss(da_loss_log, db_loss_log,
+                   ga_loss_log, gb_loss_log,
+                   exp_window=None):
+    if exp_window is not None:
+        da_loss_log = exp_moving_mean(da_loss_log, exp_window)
+        db_loss_log = exp_moving_mean(db_loss_log, exp_window)
+        ga_loss_log = exp_moving_mean(ga_loss_log, exp_window)
+        gb_loss_log = exp_moving_mean(gb_loss_log, exp_window)
+
+    plt.figure(figsize=(12, 8))
+    plt.subplot(2, 2, 1)
+    plt.plot(ga_loss_log)
+    plt.title("gener_a loss")
+    plt.xlabel("train step")
+    plt.ylabel("MSE")
+
+    plt.subplot(2, 2, 2)
+    plt.plot(da_loss_log)
+    plt.title("discr_a loss")
+    plt.xlabel("train step")
+    plt.ylabel("MSE")
+
+
+    plt.figure(figsize=(12, 8))
+    plt.subplot(2, 2, 1)
+    plt.plot(gb_loss_log)
+    plt.title("gener_b loss")
+    plt.xlabel("train step")
+    plt.ylabel("MSE")
+
+    plt.subplot(2, 2, 2)
+    plt.plot(db_loss_log)
+    plt.title("discr_b loss")
+    plt.xlabel("train step")
+    plt.ylabel("MSE")
+    plt.show()
+
+def plot_geners(sample_a, sample_b,
+                gener_a, gener_b):
+    gener_a.eval()
+    gener_b.eval()
+
+    plt.figure(figsize=(8, 6))
+    plt.tight_layout()
+
+    plt.subplot(2, 3, 1)
+    plt.imshow(sample_b.cpu().view(1, 1, 28, 28).data[0]
+             .numpy().reshape((28, 28)),
+             cmap='binary')
+    plt.title("b")
+
+    plt.subplot(2, 3, 2)
+    plt.tight_layout()
+    plt.imshow(gener_a(sample_b.view(1, 1, 28, 28)).cpu().data[0]
+             .numpy().reshape((28, 28)),
+             cmap='binary')
+    plt.title("gener_a(b)")
+
+    plt.subplot(2, 3, 3)
+    plt.tight_layout()
+    plt.imshow(gener_b(gener_a(sample_b.view(1, 1, 28, 28))).cpu().data[0]
+             .numpy().reshape((28, 28)),
+             cmap='binary')
+    plt.title("gener_b(gener_a(b))")
+
+    plt.subplot(2, 3, 4)
+    plt.tight_layout()
+    plt.imshow(sample_a.cpu().view(1, 1, 28, 28).data[0]
+             .numpy().reshape((28, 28)), 
+             cmap='binary')
+    plt.title("a")
+
+    plt.subplot(2, 3, 5)
+    plt.tight_layout()
+    plt.imshow(gener_b(sample_a.view(1, 1, 28, 28)).cpu().data[0]
+             .numpy().reshape((28, 28)),
+             cmap='binary')
+    plt.title("gener_b(a)")
+
+    plt.subplot(2, 3, 6)
+    plt.tight_layout()
+    plt.imshow(gener_a(gener_b(sample_a.view(1, 1, 28, 28))).cpu().data[0]
+             .numpy().reshape((28, 28)),
+             cmap='binary')
+    plt.title("gener_a(gener_b(a))")
+
+    plt.show()
