@@ -15,7 +15,6 @@ def compute_loss(gener_a, gener_b,
                  batch_a, batch_b,
                  alpha,
                  discr_loss = 'mse',
-                 # cyclic_opposite = 0,
                  use_gpu=None,):
     if discr_loss.lower() == 'mse':
         discr_loss = F.mse_loss
@@ -33,7 +32,7 @@ def compute_loss(gener_a, gener_b,
     discr_b_onfke = discr_b(fake_b)
     
     cyclic_a = gener_a(fake_b)
-    cyclic_b = gener_a(fake_a)
+    cyclic_b = gener_b(fake_a)
 
     # parts of discrimentators loss
     discr_a_rly_loss = discr_loss(
@@ -93,7 +92,7 @@ def compute_combined_loss(gener_a, gener_b,
     discr_b_onfke = discr_b(fake_b)
     
     cyclic_a = gener_a(fake_b)
-    cyclic_b = gener_a(fake_a)
+    cyclic_b = gener_b(fake_a)
 
     # parts of discrimentators loss
     discr_a_rly_loss = discr_loss(
@@ -125,8 +124,6 @@ def compute_combined_loss(gener_a, gener_b,
         aduc(torch.ones_like(discr_b_onfke), use_gpu))
 
     # cyclic loss
-    #gener_a_cyc_loss = F.l1_loss(cyclic_a, batch_a)
-    #gener_b_cyc_loss = F.l1_loss(cyclic_b, batch_b)
     gener_a_cyc_loss = F.l1_loss(cyclic_a, aduc(Variable(batch_a.data)))
     gener_b_cyc_loss = F.l1_loss(cyclic_b, aduc(Variable(batch_b.data)))
 
@@ -143,7 +140,7 @@ def compute_combined_loss(gener_a, gener_b,
 
     return losses
 
-def conserve_loss(loss, net):
+def consensus_loss(loss, net):
     grad_params = torch.autograd.grad(loss,
                                       net.parameters(),
                                       create_graph=True)
