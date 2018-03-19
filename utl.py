@@ -9,6 +9,8 @@ def linear_size(output):
     size = int(h * w)
     return size
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 conv_normal_mean = 0.0
 conv_normal_sd = 0.02
@@ -89,32 +91,27 @@ def visualize_loss(da_loss_log, db_loss_log,
         ga_loss_log = exp_moving_mean(ga_loss_log, exp_window)
         gb_loss_log = exp_moving_mean(gb_loss_log, exp_window)
 
-    plt.figure(figsize=(12, 8))
-    plt.subplot(2, 2, 1)
-    plt.plot(ga_loss_log)
-    plt.title("gener_a loss")
+    plt.figure(figsize=(10, 4))
+    plt.tight_layout()
+
+    plt.subplot(1, 2, 1)
+    plt.plot(ga_loss_log, label="gener_a")
+    plt.plot(gb_loss_log, label="gener_b")
     plt.xlabel("train step")
     plt.ylabel("MSE")
+    plt.title("generators loss")
+    plt.legend()
 
-    plt.subplot(2, 2, 2)
-    plt.plot(da_loss_log)
-    plt.title("discr_a loss")
+    plt.subplot(1, 2, 2)
+    plt.plot(da_loss_log, label="discr_a")
+    plt.plot(db_loss_log, label="discr_b")
+    plt.tight_layout()
     plt.xlabel("train step")
     plt.ylabel("MSE")
+    plt.title("discriminators loss")
+    plt.legend()
 
-
-    plt.figure(figsize=(12, 8))
-    plt.subplot(2, 2, 1)
-    plt.plot(gb_loss_log)
-    plt.title("gener_b loss")
-    plt.xlabel("train step")
-    plt.ylabel("MSE")
-
-    plt.subplot(2, 2, 2)
-    plt.plot(db_loss_log)
-    plt.title("discr_b loss")
-    plt.xlabel("train step")
-    plt.ylabel("MSE")
+    plt.tight_layout()
     plt.show()
 
 def plot_geners(sample_a, sample_b,
@@ -123,7 +120,6 @@ def plot_geners(sample_a, sample_b,
     gener_b.eval()
 
     plt.figure(figsize=(8, 6))
-    plt.tight_layout()
 
     plt.subplot(2, 3, 1)
     plt.imshow(sample_b.cpu().view(1, 1, 28, 28).data[0]
@@ -132,38 +128,65 @@ def plot_geners(sample_a, sample_b,
     plt.title("b")
 
     plt.subplot(2, 3, 2)
-    plt.tight_layout()
     plt.imshow(gener_a(sample_b.view(1, 1, 28, 28)).cpu().data[0]
              .numpy().reshape((28, 28)),
              cmap='binary')
     plt.title("gener_a(b)")
 
     plt.subplot(2, 3, 3)
-    plt.tight_layout()
     plt.imshow(gener_b(gener_a(sample_b.view(1, 1, 28, 28))).cpu().data[0]
              .numpy().reshape((28, 28)),
              cmap='binary')
     plt.title("gener_b(gener_a(b))")
 
     plt.subplot(2, 3, 4)
-    plt.tight_layout()
     plt.imshow(sample_a.cpu().view(1, 1, 28, 28).data[0]
              .numpy().reshape((28, 28)), 
              cmap='binary')
     plt.title("a")
 
     plt.subplot(2, 3, 5)
-    plt.tight_layout()
     plt.imshow(gener_b(sample_a.view(1, 1, 28, 28)).cpu().data[0]
              .numpy().reshape((28, 28)),
              cmap='binary')
     plt.title("gener_b(a)")
 
     plt.subplot(2, 3, 6)
-    plt.tight_layout()
     plt.imshow(gener_a(gener_b(sample_a.view(1, 1, 28, 28))).cpu().data[0]
              .numpy().reshape((28, 28)),
              cmap='binary')
     plt.title("gener_a(gener_b(a))")
 
+    plt.tight_layout()
     plt.show()
+
+def grad_norm(model):
+    counter = 0
+    sum_grads = 0
+    for param in model.parameters():
+        sum_grads += torch.sum(torch.abs(param.grad.data / param.data))
+        counter += 1
+    return sum_grads / counter
+
+def plot_grad_norms(da_grad_log, db_grad_log,
+                    ga_grad_log, gb_grad_log):
+    plt.figure(figsize=(10, 4))
+    
+    plt.subplot(1, 2, 1)
+    plt.plot(ga_grad_log, label="gener_a")
+    plt.plot(gb_grad_log, label="gener_b")
+    plt.xlabel("step")
+    plt.ylabel("grad norm")
+    plt.legend()
+
+
+    plt.subplot(1, 2, 2)
+    plt.plot(da_grad_log, label="disrc_a")
+    plt.plot(db_grad_log, label="discr_b")
+    plt.xlabel("step")
+    plt.ylabel("grad norm")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+    
