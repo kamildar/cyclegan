@@ -3,14 +3,15 @@ import numpy as np
 import torch.nn.functional as F
 
 
-
-#dim = None
-#dropout = None
-#norm_lay = None
+# dim = None
+# dropout = None
+# norm_lay = None
 activation = nn.LeakyReLU(0.1)
 bias = False
 
 # for square images
+
+
 def conv_size(input_size, kernel_size, stride, padding):
     out = int((input_size + 2 * padding - kernel_size) / stride) + 1
     return out
@@ -19,7 +20,10 @@ def conv_size(input_size, kernel_size, stride, padding):
 # conv > ?dropout > conv
 # possible params
 # kernel_size, padding, bias, reflection type
+
+
 class ResnetBlock(nn.Module):
+
     def __init__(self, dim, norm_lay, dropout):
         super().__init__()
         self.conv_seq = self.conv_block(dim, norm_lay, dropout)
@@ -33,8 +37,7 @@ class ResnetBlock(nn.Module):
             norm_lay(dim),
             activation
         ]
-        
-        
+
         if dropout is not None:
             conv_block += [nn.Dropout(dropout)]
 
@@ -55,7 +58,10 @@ class ResnetBlock(nn.Module):
 # possible params
 # first/last conv: ksize, pad, stride
 # down/trans conv: number, conv params
+
+
 class ResnetGenerator(nn.Module):
+
     def __init__(self,
                  input_nc,
                  output_nc,
@@ -70,7 +76,8 @@ class ResnetGenerator(nn.Module):
 
         resnet_seq = [
             nn.ReflectionPad2d(3),
-            nn.Conv2d(input_nc, gen_filters, kernel_size=7, padding=0, bias=bias),
+            nn.Conv2d(input_nc, gen_filters,
+                      kernel_size=7, padding=0, bias=bias),
             norm_lay(gen_filters),
             activation
         ]
@@ -86,7 +93,7 @@ class ResnetGenerator(nn.Module):
                     stride=2,
                     padding=1,
                     bias=bias
-                    ),
+                ),
                 norm_lay(gen_filters * power * 2),
                 activation
             ]
@@ -98,7 +105,7 @@ class ResnetGenerator(nn.Module):
                     gen_filters * power,
                     norm_lay,
                     dropout)
-                ]
+            ]
 
         for i in range(n_downsampling):
             power = 2 ** (n_downsampling - i)
@@ -110,10 +117,10 @@ class ResnetGenerator(nn.Module):
                     stride=2,
                     padding=1,
                     output_padding=1
-                    ),
+                ),
                 norm_lay(int(gen_filters * power / 2)),
                 activation
-                ]
+            ]
 
         resnet_seq += [nn.ReflectionPad2d(3)]
         resnet_seq += [nn.Conv2d(gen_filters, output_nc,
@@ -130,6 +137,7 @@ class ResnetGenerator(nn.Module):
 
 
 class Discriminator(nn.Module):
+
     def __init__(self,
                  input_nc,
                  discr_filters,
@@ -156,7 +164,7 @@ class Discriminator(nn.Module):
 
         filters = np.linspace(discr_filters,
                               discr_filters * max_power,
-                              num=n_layers+1,
+                              num=n_layers + 1,
                               dtype=int).tolist()
 
         prev_filter = discr_filters
@@ -168,7 +176,7 @@ class Discriminator(nn.Module):
                     kernel_size=ksize,
                     stride=strd,
                     padding=pad
-                    ),
+                ),
                 norm_lay(interm_filter),
                 activation
             ]
@@ -181,8 +189,8 @@ class Discriminator(nn.Module):
                 kernel_size=ksize,
                 stride=strd,
                 padding=pad
-                )
-            ]
+            )
+        ]
 
         for i in range(n_layers + 2):
             size = conv_size(size, ksize, strd, pad)
