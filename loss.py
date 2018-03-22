@@ -11,6 +11,9 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from utl import aduc
 
+# ___HARDCODED NORMS___
+norm_cyclic = 1 / 90
+
 
 def compute_loss(gener_a, gener_b,
                  discr_a, discr_b,
@@ -70,8 +73,8 @@ def compute_loss(gener_a, gener_b,
     gener_b_cyc_loss = F.l1_loss(cyclic_b, aduc(Variable(batch_b.data)))
 
     # generators loss
-    gener_a_loss = gener_a_fool + alpha * gener_a_cyc_loss
-    gener_b_loss = gener_b_fool + alpha * gener_b_cyc_loss
+    gener_a_loss = gener_a_fool + alpha * gener_a_cyc_loss * norm_cyclic
+    gener_b_loss = gener_b_fool + alpha * gener_b_cyc_loss * norm_cyclic
 
     gener_loss = (gener_a_loss + gener_b_loss) / 2
 
@@ -85,9 +88,10 @@ def compute_loss(gener_a, gener_b,
 
 
 def consensus_loss(loss, net):
-    grad_params = torch.autograd.grad(loss,
-                                      net.parameters(),
-                                      create_graph=True)
+    grad_params = torch.autograd.grad(
+        loss,
+        net.parameters(),
+        create_graph=True)
     grad_norm = 0
     for grad in grad_params:
         grad_norm += grad.pow(2).sum()
