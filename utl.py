@@ -3,20 +3,24 @@ import torch
 import matplotlib.pyplot as plt
 from collections import OrderedDict
 
+
 def linear_size(output):
     output_size = np.array(output.size())
     h, w = output_size[2], output_size[3]
     size = int(h * w)
     return size
 
+
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 
 conv_normal_mean = 0.0
 conv_normal_sd = 0.02
 bnorm_mean = 1.0
 bnorm_sd = 0.02
 bnorm_fill = 0
+
 
 def weights_init(m):
     classname = m.__class__.__name__
@@ -38,6 +42,7 @@ def aduc(x, use_gpu=None):
     else:
         return x
 
+
 def set_names(discr_a, discr_b,
               gener_a, gener_b,
               opt_gener_a, opt_gener_b,
@@ -52,9 +57,11 @@ def set_names(discr_a, discr_b,
     opt_discr_b.__doc__ = 'opt_discr_b'
     pass
 
+
 def train_stage(*args):
     for arg in args:
         arg.train()
+
 
 def create_checkpoint(*args):
     checkpoint = OrderedDict()
@@ -63,24 +70,26 @@ def create_checkpoint(*args):
         checkpoint[name] = net.state_dict()
     return checkpoint
 
+
 def exp_moving_mean(data, window=250):
     if not isinstance(data, np.ndarray):
         data = np.array(data)
 
-    alpha = 2 /(window + 1.0)
-    alpha_rev = 1-alpha
+    alpha = 2 / (window + 1.0)
+    alpha_rev = 1 - alpha
     n = data.shape[0]
 
-    pows = alpha_rev**(np.arange(n+1))
+    pows = alpha_rev**(np.arange(n + 1))
 
-    scale_arr = 1/pows[:-1]
-    offset = data[0]*pows[1:]
-    pw0 = alpha*alpha_rev**(n-1)
+    scale_arr = 1 / pows[:-1]
+    offset = data[0] * pows[1:]
+    pw0 = alpha * alpha_rev**(n - 1)
 
-    mult = data*pw0*scale_arr
+    mult = data * pw0 * scale_arr
     cumsums = mult.cumsum()
-    out = offset + cumsums*scale_arr[::-1]
+    out = offset + cumsums * scale_arr[::-1]
     return out
+
 
 def visualize_loss(da_loss_log, db_loss_log,
                    ga_loss_log, gb_loss_log,
@@ -114,6 +123,7 @@ def visualize_loss(da_loss_log, db_loss_log,
     plt.tight_layout()
     plt.show()
 
+
 def plot_geners(sample_a, sample_b,
                 gener_a, gener_b):
     gener_a.eval()
@@ -123,62 +133,63 @@ def plot_geners(sample_a, sample_b,
 
     plt.subplot(2, 3, 1)
     plt.imshow(sample_b.cpu().view(1, 1, 28, 28).data[0]
-             .numpy().reshape((28, 28)),
-             cmap='binary')
+               .numpy().reshape((28, 28)),
+               cmap='binary')
     plt.title("b")
 
     plt.subplot(2, 3, 2)
     plt.imshow(gener_a(sample_b.view(1, 1, 28, 28)).cpu().data[0]
-             .numpy().reshape((28, 28)),
-             cmap='binary')
+               .numpy().reshape((28, 28)),
+               cmap='binary')
     plt.title("gener_a(b)")
 
     plt.subplot(2, 3, 3)
     plt.imshow(gener_b(gener_a(sample_b.view(1, 1, 28, 28))).cpu().data[0]
-             .numpy().reshape((28, 28)),
-             cmap='binary')
+               .numpy().reshape((28, 28)),
+               cmap='binary')
     plt.title("gener_b(gener_a(b))")
 
     plt.subplot(2, 3, 4)
     plt.imshow(sample_a.cpu().view(1, 1, 28, 28).data[0]
-             .numpy().reshape((28, 28)), 
-             cmap='binary')
+               .numpy().reshape((28, 28)),
+               cmap='binary')
     plt.title("a")
 
     plt.subplot(2, 3, 5)
     plt.imshow(gener_b(sample_a.view(1, 1, 28, 28)).cpu().data[0]
-             .numpy().reshape((28, 28)),
-             cmap='binary')
+               .numpy().reshape((28, 28)),
+               cmap='binary')
     plt.title("gener_b(a)")
 
     plt.subplot(2, 3, 6)
     plt.imshow(gener_a(gener_b(sample_a.view(1, 1, 28, 28))).cpu().data[0]
-             .numpy().reshape((28, 28)),
-             cmap='binary')
+               .numpy().reshape((28, 28)),
+               cmap='binary')
     plt.title("gener_a(gener_b(a))")
 
     plt.tight_layout()
     plt.show()
 
-def grad_norm(model):
-    counter = 0
-    sum_grads = 0
+
+def grad_norm(model, norm_type=2):
+    total_norm = 0
     for param in model.parameters():
-        sum_grads += torch.sum(torch.abs(param.grad.data / param.data))
-        counter += 1
-    return sum_grads / counter
+        param_norm = param.grad.data.norm(norm_type)
+        total_norm += param_norm ** norm_type
+    total_norm = total_norm ** (1. / norm_type)
+    return total_norm
+
 
 def plot_grad_norms(da_grad_log, db_grad_log,
                     ga_grad_log, gb_grad_log):
     plt.figure(figsize=(10, 4))
-    
+
     plt.subplot(1, 2, 1)
     plt.plot(ga_grad_log, label="gener_a")
     plt.plot(gb_grad_log, label="gener_b")
     plt.xlabel("step")
     plt.ylabel("grad norm")
     plt.legend()
-
 
     plt.subplot(1, 2, 2)
     plt.plot(da_grad_log, label="disrc_a")
@@ -189,4 +200,3 @@ def plot_grad_norms(da_grad_log, db_grad_log,
 
     plt.tight_layout()
     plt.show()
-    
